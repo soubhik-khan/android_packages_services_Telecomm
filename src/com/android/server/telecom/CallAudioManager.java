@@ -17,6 +17,8 @@
 package com.android.server.telecom;
 
 import android.content.Context;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
 import android.media.AudioManager;
 import android.telecom.AudioState;
 import android.telecom.CallState;
@@ -32,6 +34,8 @@ import java.util.Objects;
 final class CallAudioManager extends CallsManagerListenerBase
         implements WiredHeadsetManager.Listener {
     private static final int STREAM_NONE = -1;
+    private static final boolean DBG = false;
+
 
     private final StatusBarNotifier mStatusBarNotifier;
     private final AudioManager mAudioManager;
@@ -69,6 +73,8 @@ final class CallAudioManager extends CallsManagerListenerBase
     public void onCallAdded(Call call) {
         onCallUpdated(call);
 
+        turnOnNoiseSuppression(mContext, true);
+
         if (hasFocus() && getForegroundCall() == call) {
             if (!call.isIncoming()) {
                 // Unmute new outgoing call.
@@ -81,6 +87,8 @@ final class CallAudioManager extends CallsManagerListenerBase
     @Override
     public void onCallRemoved(Call call) {
         // If we didn't already have focus, there's nothing to do.
+        turnOnNoiseSuppression(mContext, false);
+
         if (hasFocus()) {
             if (CallsManager.getInstance().getCalls().isEmpty()) {
                 Log.v(this, "all calls removed, reseting system audio to default state");
@@ -100,14 +108,8 @@ final class CallAudioManager extends CallsManagerListenerBase
     public void onIncomingCallAnswered(Call call) {
         int route = mAudioState.getRoute();
 
-        // We do two things:
-        // (1) If this is the first call, then we can to turn on bluetooth if available.
-        // (2) Unmute the audio for the new incoming call.
-        boolean isOnlyCall = CallsManager.getInstance().getCalls().size() == 1;
-        if (isOnlyCall && mBluetoothManager.isBluetoothAvailable()) {
-            mBluetoothManager.connectBluetoothAudio();
-            route = AudioState.ROUTE_BLUETOOTH;
-        }
+        // BT stack will connect audio upon receiving active call state.
+        // We unmute the audio for the new incoming call.
 
         setSystemAudioState(false /* isMute */, route, mAudioState.getSupportedRouteMask());
 
@@ -560,6 +562,50 @@ final class CallAudioManager extends CallsManagerListenerBase
 
     private boolean hasFocus() {
         return mAudioFocusStreamType != STREAM_NONE;
+    }
+
+    static void turnOnNoiseSuppression(Context context, boolean flag) {
+        if (DBG) Log.i("NoiseSuppression", "turnOnNoiseSuppression: %b", flag);
+        Resources res;
+        // get resource from services telephony
+        try {
+            res = context.getPackageManager().getResourcesForApplication("com.android.phone");
+        } catch (NameNotFoundException e) {
+            e.printStackTrace();
+            return;
+        }
+        int resourceId = res.getIdentifier("com.android.phone:bool/has_in_call_noise_suppression", null, null);
+        if (!res.getBoolean(resourceId)) {
+            return;
+        }
+        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+
+        int nsp = android.provider.Settings.System.getInt(context.getContentResolver(),
+                android.provider.Settings.System.NOISE_SUPPRESSION, 1);
+
+        resourceId = res.getIdentifier("com.android.phone:string/in_call_noise_suppression_audioparameter", null, null);
+        String aParam = res.getString(resourceId);
+        String[] aPValues = aParam.split("=");
+
+        if (aPValues[0].length() == 0) {
+            aPValues[0] = "noise_suppression";
+        }
+
+        if (aPValues[1].length() == 0) {
+            aPValues[1] = "on";
+        }
+
+        if (aPValues[2].length() == 0) {
+            aPValues[2] = "off";
+        }
+
+        if (nsp == 1 && flag) {
+            if (DBG) Log.i("NoiseSuppression", "turnOnNoiseSuppression: %s=%s" + aPValues[0], aPValues[1]);
+            audioManager.setParameters(aPValues[0] + "=" + aPValues[1]);
+        } else {
+            if (DBG) Log.i("NoiseSuppression", "turnOnNoiseSuppression: %s=%s" + aPValues[0], aPValues[2]);
+            audioManager.setParameters(aPValues[0] + "=" + aPValues[2]);
+        }
     }
 
     /**
