@@ -65,6 +65,7 @@ import com.android.server.telecom.callfiltering.CallScreeningServiceFilter;
 import com.android.server.telecom.callfiltering.DirectToVoicemailCallFilter;
 import com.android.server.telecom.callfiltering.IncomingCallFilter;
 import com.android.server.telecom.components.ErrorDialogActivity;
+import com.android.server.telecom.settings.BlockedNumbersUtil;
 import com.android.server.telecom.ui.ConfirmCallDialogActivity;
 import com.android.server.telecom.ui.IncomingCallNotifier;
 
@@ -391,6 +392,7 @@ public class CallsManager extends Call.ListenerBase
         if (userManager.isPrimaryUser()) {
             onUserSwitch(Process.myUserHandle());
         }
+        BlockedNumbersUtil.registerReceivers(mContext);
     }
 
     public void setIncomingCallNotifier(IncomingCallNotifier incomingCallNotifier) {
@@ -454,7 +456,8 @@ public class CallsManager extends Call.ListenerBase
 
         List<IncomingCallFilter.CallFilter> filters = new ArrayList<>();
         filters.add(new DirectToVoicemailCallFilter(mCallerInfoLookupHelper));
-        filters.add(new AsyncBlockCheckFilter(mContext, new BlockCheckerAdapter()));
+        filters.add(new AsyncBlockCheckFilter(mContext, new BlockCheckerAdapter(),
+                mCallerInfoLookupHelper));
         filters.add(new CallScreeningServiceFilter(mContext, this, mPhoneAccountRegistrar,
                 mDefaultDialerCache, new ParcelableCallUtils.Converter(), mLock));
         new IncomingCallFilter(mContext, this, incomingCall, mLock,
