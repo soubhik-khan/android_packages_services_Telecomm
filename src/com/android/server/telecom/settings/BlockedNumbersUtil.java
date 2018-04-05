@@ -19,10 +19,8 @@ package com.android.server.telecom.settings;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.PersistableBundle;
 import android.os.UserHandle;
 import android.provider.BlockedNumberContract.SystemContract;
@@ -82,36 +80,6 @@ public final class BlockedNumbersUtil {
                 context,
                 messageSpannable,
                 Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * Receivers for enhanced call blocking feature to update the emergency call notification
-     * in below cases:
-     *  1) Carrier config changed.
-     *  2) Blocking suppression state changed.
-     */
-    private static final BroadcastReceiver mReceivers = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED.equals(action)
-                    || SystemContract.ACTION_BLOCK_SUPPRESSION_STATE_CHANGED.equals(action)) {
-                updateEmergencyCallNotification(context,
-                        SystemContract.shouldShowEmergencyCallNotification(context));
-            }
-        }
-    };
-
-    /**
-     * Register BroadcastReceiver to handle enhanced call blocking feature related event.
-     *
-     * @param context context to register the broadcast.
-     */
-    public static void registerReceivers(Context context) {
-        IntentFilter intentFilter = new IntentFilter(
-                CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        intentFilter.addAction(SystemContract.ACTION_BLOCK_SUPPRESSION_STATE_CHANGED);
-        context.registerReceiver(mReceivers, intentFilter);
     }
 
     /**

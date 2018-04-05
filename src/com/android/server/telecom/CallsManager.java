@@ -17,9 +17,11 @@
 package com.android.server.telecom;
 
 import android.app.ActivityManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.pm.UserInfo;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -32,6 +34,7 @@ import android.os.SystemVibrator;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.provider.BlockedNumberContract.SystemContract;
 import android.provider.CallLog.Calls;
 import android.provider.Settings;
 import android.telecom.CallAudioState;
@@ -47,6 +50,7 @@ import android.telecom.PhoneAccountHandle;
 import android.telecom.Logging.Runnable;
 import android.telecom.TelecomManager;
 import android.telecom.VideoProfile;
+import android.telephony.CarrierConfigManager;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -287,6 +291,24 @@ public class CallsManager extends Call.ListenerBase
     };
 
     /**
+     * Receiver for enhanced call blocking feature to update the emergency call notification
+     * in below cases:
+     *  1) Carrier config changed.
+     *  2) Blocking suppression state changed.
+     */
+    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED.equals(action)
+                    || SystemContract.ACTION_BLOCK_SUPPRESSION_STATE_CHANGED.equals(action)) {
+                BlockedNumbersUtil.updateEmergencyCallNotification(context,
+                        SystemContract.shouldShowEmergencyCallNotification(context));
+             }
+        }
+    };
+
+    /**
      * Initializes the required Telecom components.
      */
     CallsManager(
@@ -392,7 +414,11 @@ public class CallsManager extends Call.ListenerBase
         if (userManager.isPrimaryUser()) {
             onUserSwitch(Process.myUserHandle());
         }
-        BlockedNumbersUtil.registerReceivers(mContext);
+        // Register BroadcastReceiver to handle enhanced call blocking feature related event.
+        IntentFilter intentFilter = new IntentFilter(
+                CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        intentFilter.addAction(SystemContract.ACTION_BLOCK_SUPPRESSION_STATE_CHANGED);
+        context.registerReceiver(mReceiver, intentFilter);
     }
 
     public void setIncomingCallNotifier(IncomingCallNotifier incomingCallNotifier) {
