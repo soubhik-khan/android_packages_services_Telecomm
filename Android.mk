@@ -3,7 +3,8 @@ LOCAL_PATH:= $(call my-dir)
 # Build the Telecom service.
 include $(CLEAR_VARS)
 
-LOCAL_JAVA_LIBRARIES := telephony-common
+LOCAL_JAVA_LIBRARIES := telephony-common telephony-ext
+LOCAL_STATIC_JAVA_LIBRARIES := ims-ext-common
 
 LOCAL_STATIC_JAVA_LIBRARIES := org.lineageos.platform.internal
 
